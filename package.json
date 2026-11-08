@@ -1,0 +1,21 @@
+{
+  "name": "biosense-school-health-kiosk",
+  "version": "1.0.0",
+  "description": "BioSense AI — Automated Weekly Student Health Checkup & Facial Expression Stress Screening Kiosk",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "esp32",
+    "health-kiosk",
+    "ecg",
+    "pulse-oximeter",
+    "facial-ai",
+    "telemetry",
+    "school-health"
+  ],
+  "author": "RoboBee Innovators & BioSense AI",
+  "license": "MIT"
+}

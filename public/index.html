@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioSense AI — School Health Kiosk</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top App Navigation & Station Control Bar -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-logo">
+        <span class="logo-icon">🩺</span>
+        <div class="brand-text">
+          <h1>BioSense AI</h1>
+          <span class="brand-subtitle">Student Weekly Health & Stress Kiosk</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="checkup">New Checkup</button>
+      <button class="nav-tab" data-tab="history">Multi-Week History</button>
+    </nav>
+
+    <!-- Station Pairing & Connection Control -->
+    <div class="station-control-bar">
+      <div class="station-selector">
+        <label for="stationIdInput">ESP Station ID:</label>
+        <div class="station-input-wrap">
+          <input type="text" id="stationIdInput" value="ROBOBEE-HEALTH-01" placeholder="e.g. ROBOBEE-HEALTH-01" />
+          <select id="stationQuickSelect" title="Detected Stations" onchange="if(this.value){document.getElementById('stationIdInput').value=this.value; App.connector.setDeviceId(this.value);}">
+            <option value="">-- Detected Stations --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Mode Selector -->
+      <div class="mode-selector">
+        <button class="mode-btn active" data-mode="cloud" title="Stream over Internet via Cloud Relay">🌐 Cloud</button>
+        <button class="mode-btn" data-mode="simulator" title="Run with realistic synthetic biosignals">🧪 Demo</button>
+        <button class="mode-btn" data-mode="webserial" title="Direct USB Cable connection">🔌 USB</button>
+        <button class="mode-btn" data-mode="websocket" title="Direct Local Wi-Fi connection">📶 Wi-Fi</button>
+      </div>
+
+      <!-- Live Station Indicator -->
+      <div class="station-status-box">
+        <span class="status-indicator status-online" id="stationStatusBadge"></span>
+        <span class="status-label" id="stationStatusLabel">Connected: ROBOBEE-HEALTH-01</span>
+      </div>
+
+      <!-- Sound Toggle -->
+      <button id="soundToggleBtn" class="sound-toggle-btn" title="Toggle Heartbeat Sound">🔈 Pulse Sound OFF</button>
+    </div>
+  </header>
+
+  <!-- Persistent Live Hardware Telemetry Banner (Visible across all checkup steps) -->
+  <div class="live-hardware-strip">
+    <div class="live-strip-col">
+      <span class="live-strip-tag">LIVE LEAD I ECG</span>
+      <canvas id="persistentMiniEcg" width="240" height="42"></canvas>
+    </div>
+    <div class="live-strip-vitals">
+      <div class="strip-vital"><span class="icon">❤️</span> <strong id="topLiveHr">--</strong> <small>BPM</small></div>
+      <div class="strip-vital"><span class="icon">🫁</span> <strong id="topLiveSpo2">--</strong> <small>% O2</small></div>
+      <div class="strip-vital"><span class="icon">🌡️</span> <strong id="topLiveTemp">36.6°C</strong></div>
+      <div class="strip-vital"><span class="icon">⚡</span> <span id="topLiveEcgState" class="tag-status">ECG: CONNECTED</span></div>
+    </div>
+  </div>
+
+  <!-- ================= VIEW 1: 6-STEP CHECKUP WORKFLOW ================= -->
+  <main class="app-view active" id="view-checkup">
+
+    <!-- 6-Step Interactive Stepper Bar -->
+    <div class="stepper-bar">
+      <div class="step-pill active" onclick="App.goToStep(1)">
+        <span class="step-num">1</span>
+        <span class="step-name">Student Intake</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-pill" onclick="App.goToStep(2)">
+        <span class="step-num">2</span>
+        <span class="step-name">Sensor Placement</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-pill" onclick="App.goToStep(3)">
+        <span class="step-num">3</span>
+        <span class="step-name">Vitals & ECG</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-pill" onclick="App.goToStep(4)">
+        <span class="step-num">4</span>
+        <span class="step-name">Facial AI</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-pill" onclick="App.goToStep(5)">
+        <span class="step-num">5</span>
+        <span class="step-name">Standards Review</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-pill" onclick="App.goToStep(6)">
+        <span class="step-num">6</span>
+        <span class="step-name">Health Card</span>
+      </div>
+    </div>
+
+    <div class="step-container">
+
+      <!-- STEP 1: STUDENT INTAKE & QUESTIONNAIRE -->
+      <section class="step-card active" data-step="1">
+        <div class="card-header">
+          <h2>Step 1: Student Information & Health Questionnaire</h2>
+          <p>Please enter the student's details and answer the quick weekly health screening questions.</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="inputStudentName">Student Full Name *</label>
+            <input type="text" id="inputStudentName" placeholder="e.g. Tanvir Ahmed" required />
+          </div>
+
+          <div class="form-group">
+            <label for="inputStudentId">Student ID / Roll No *</label>
+            <input type="text" id="inputStudentId" list="studentsDatalist" placeholder="e.g. STU-2026-001" required />
+            <datalist id="studentsDatalist"></datalist>
+          </div>
+
+          <div class="form-group">
+            <label for="inputGrade">Class / Grade</label>
+            <select id="inputGrade">
+              <option value="Class 5">Class 5</option>
+              <option value="Class 6">Class 6</option>
+              <option value="Class 7" selected>Class 7</option>
+              <option value="Class 8">Class 8</option>
+              <option value="Class 9">Class 9</option>
+              <option value="Class 10">Class 10</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="inputAge">Age (Years)</label>
+            <input type="number" id="inputAge" value="13" min="8" max="19" />
+          </div>
+
+          <div class="form-group">
+            <label for="inputGender">Gender</label>
+            <select id="inputGender">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="questionnaire-section">
+          <h3>Quick Health & Lifestyle Checklist:</h3>
+
+          <div class="q-row">
+            <div class="q-label">1. How many hours of sleep did you get last night?</div>
+            <div class="q-options">
+              <label><input type="radio" name="sleepHours" value="<5"> Less than 5 hrs (Tired)</label>
+              <label><input type="radio" name="sleepHours" value="5-7"> 5 – 7 hrs (Moderate)</label>
+              <label><input type="radio" name="sleepHours" value="8+" checked> 8+ hrs (Well-rested)</label>
+            </div>
+          </div>
+
+          <div class="q-row">
+            <div class="q-label">2. Are you experiencing any headache, feverish feeling, or fatigue today?</div>
+            <div class="q-options">
+              <label><input type="radio" name="feelSick" value="no" checked> No, feeling good</label>
+              <label><input type="radio" name="feelSick" value="yes"> Yes, feeling unwell / tired</label>
+            </div>
+          </div>
+
+          <div class="q-row">
+            <div class="q-label">3. Did you eat breakfast and drink sufficient water this morning?</div>
+            <div class="q-options">
+              <label><input type="radio" name="breakfast" value="yes" checked> Yes, had breakfast & water</label>
+              <label><input type="radio" name="breakfast" value="no"> No, skipped breakfast / thirsty</label>
+            </div>
+          </div>
+
+          <div class="q-row">
+            <div class="q-label">4. Any chest tightness, dizziness, or shortness of breath?</div>
+            <div class="q-options">
+              <label><input type="radio" name="chestPain" value="no" checked> None</label>
+              <label><input type="radio" name="chestPain" value="yes"> Yes, mild discomfort</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-footer">
+          <button class="btn btn-primary" onclick="App.goToStep(2)">Proceed to Sensor Placement →</button>
+        </div>
+      </section>
+
+      <!-- STEP 2: SENSOR PLACEMENT GUIDANCE -->
+      <section class="step-card" data-step="2">
+        <div class="card-header">
+          <h2>Step 2: Interactive Sensor Placement Guidance</h2>
+          <p>Follow the visual instructions below to attach the sensors to the student. Check the hardware readiness indicators.</p>
+        </div>
+
+        <div class="placement-cards-grid">
+          <!-- Card 1: Pulse Oximeter -->
+          <div class="placement-card">
+            <div class="card-badge">Sensor 1</div>
+            <div class="placement-icon">🩸</div>
+            <h3>MAX30102 Pulse Oximeter</h3>
+            <p>Place right index finger flat against the optical red sensor. Rest hand on table. <strong>Do not press too hard.</strong></p>
+            <div class="check-item waiting" id="chkOximeter">
+              <span class="dot"></span>
+              <span class="status-text">Waiting for finger...</span>
+            </div>
+          </div>
+
+          <!-- Card 2: ECG Sensor -->
+          <div class="placement-card">
+            <div class="card-badge">Sensor 2</div>
+            <div class="placement-icon">⚡</div>
+            <h3>AD8232 ECG Leads</h3>
+            <p>Attach the 3 electrode pads: <strong>RA (Red)</strong> on Right Arm, <strong>LA (Yellow)</strong> on Left Arm, and <strong>RL (Green)</strong> on abdomen/wrist.</p>
+            <div class="check-item ready" id="chkEcg">
+              <span class="dot"></span>
+              <span class="status-text">Electrodes Connected ✔</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Temperature -->
+          <div class="placement-card">
+            <div class="card-badge">Sensor 3</div>
+            <div class="placement-icon">🌡️</div>
+            <h3>TMP36 Temperature Probe</h3>
+            <p>Hold the temperature sensor probe gently between finger and thumb or press against skin for 10 seconds.</p>
+            <div class="check-item ready" id="chkTemp">
+              <span class="dot"></span>
+              <span class="status-text">Calibrated (36.6°C) ✔</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Webcam -->
+          <div class="placement-card">
+            <div class="card-badge">Sensor 4</div>
+            <div class="placement-icon">📷</div>
+            <h3>Laptop Webcam Camera</h3>
+            <p>Sit upright and face the laptop screen directly. Keep head still and centered for the facial stress scan.</p>
+            <div class="check-item ready" id="chkCam">
+              <span class="dot"></span>
+              <span class="status-text">Camera Ready ✔</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-footer">
+          <button class="btn btn-secondary" onclick="App.goToStep(1)">← Back to Intake</button>
+          <button class="btn btn-primary" onclick="App.goToStep(3)">Start 20s Vitals Recording →</button>
+        </div>
+      </section>
+
+      <!-- STEP 3: VITALS & ECG RECORDING -->
+      <section class="step-card" data-step="3">
+        <div class="card-header">
+          <h2>Step 3: Guided 20-Second Clinical Vitals & ECG Oscilloscope</h2>
+          <p>Real-time physiological telemetry stream. Click "Start 20s Recording" to capture stable clinical baseline averages.</p>
+        </div>
+
+        <!-- Live Vitals Meters -->
+        <div class="vitals-dashboard-grid">
+          <!-- Heart Rate Meter -->
+          <div class="vital-meter-card hr-card">
+            <div class="meter-top">
+              <span class="vital-icon pulse-animation">❤️</span>
+              <span class="vital-label">Resting Heart Rate</span>
+            </div>
+            <div class="meter-main">
+              <span class="digital-val" id="liveHeartRateVal">76</span>
+              <span class="unit">BPM</span>
+            </div>
+            <div class="meter-sub">Pediatric Standard: 60 – 100 BPM</div>
+          </div>
+
+          <!-- SpO2 Meter -->
+          <div class="vital-meter-card spo2-card">
+            <div class="meter-top">
+              <span class="vital-icon">🫁</span>
+              <span class="vital-label">Blood Oxygen (SpO2)</span>
+            </div>
+            <div class="meter-main">
+              <span class="digital-val" id="liveSpo2Val">98%</span>
+              <span class="unit">O2</span>
+            </div>
+            <div class="meter-sub">AAP Standard: 95% – 100%</div>
+          </div>
+
+          <!-- Temperature Meter -->
+          <div class="vital-meter-card temp-card">
+            <div class="meter-top">
+              <span class="vital-icon">🌡️</span>
+              <span class="vital-label">Body Temperature</span>
+            </div>
+            <div class="meter-main">
+              <span class="digital-val" id="liveTempVal">36.6°C</span>
+              <span class="unit-alt" id="liveTempFVal">97.9°F</span>
+            </div>
+            <div class="meter-sub">Standard: 36.5°C – 37.5°C</div>
+          </div>
+        </div>
+
+        <!-- ECG Oscilloscope Canvas Box -->
+        <div class="oscilloscope-container">
+          <div class="osc-header">
+            <div class="osc-title">
+              <span class="lead-tag">LEAD I</span>
+              <span>AD8232 Clinical ECG Oscilloscope</span>
+              <span class="leads-off-badge" id="liveLeadsBadge" style="display:none;">⚠ LEADS OFF</span>
+            </div>
+            <div class="osc-stats">
+              <span>Standard: 25 mm/s</span>
+              <span>Gain: 10 mm/mV</span>
+              <span class="hz-rate">Rate: 25 Hz</span>
+            </div>
+          </div>
+
+          <canvas id="ecgCanvas" width="800" height="240"></canvas>
+        </div>
+
+        <!-- Recording Timer & Progress -->
+        <div class="recording-control-bar">
+          <div class="recording-timer-box">
+            <span class="timer-lbl">Session Timer:</span>
+            <span class="timer-digits" id="recordingTimerText">20s</span>
+          </div>
+
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="recordingProgressBar"></div>
+          </div>
+
+          <div class="recording-actions">
+            <button class="btn btn-record" id="startRecordingBtn" onclick="App.startClinicalRecording()">
+              ⏺ Start 20s Clinical Recording
+            </button>
+            <span class="badge-recording" id="recordingActiveBadge" style="display:none;">
+              <span class="red-dot"></span> Recording in progress...
+            </span>
+            <button class="btn btn-primary" id="proceedToFaceBtn" style="display:none;" onclick="App.goToStep(4)">
+              Proceed to Facial AI Scan →
+            </button>
+          </div>
+        </div>
+
+        <div class="action-footer">
+          <button class="btn btn-secondary" onclick="App.goToStep(2)">← Back to Placement</button>
+        </div>
+      </section>
+
+      <!-- STEP 4: LAPTOP WEBCAM FACIAL EXPRESSION & STRESS AI -->
+      <section class="step-card" data-step="4">
+        <div class="card-header">
+          <h2>Step 4: Laptop Camera Facial Expression & Mental Stress AI</h2>
+          <p>Real-time facial micro-expression analysis detecting mood, drowsiness, vitality, and academic stress.</p>
+        </div>
+
+        <div class="camera-layout-grid">
+          <!-- Camera Feed & Bounding Box Canvas -->
+          <div class="camera-viewport-card">
+            <div class="video-wrapper">
+              <video id="webcamVideo" autoplay playsinline muted></video>
+              <canvas id="faceOverlayCanvas"></canvas>
+            </div>
+            <div class="camera-caption">Face centered in box. Look directly into lens.</div>
+          </div>
+
+          <!-- Live Facial AI Diagnostic HUD -->
+          <div class="facial-metrics-panel">
+            <h3>Clinical Facial & Dermatology AI Metrics:</h3>
+
+            <div class="hud-metric-row">
+              <span class="lbl">Detected Emotional Tone:</span>
+              <span class="hud-badge badge-emerald" id="faceMoodBadge">CALM (90%)</span>
+            </div>
+
+            <div class="hud-metric-row">
+              <span class="lbl">Mental Stress Index:</span>
+              <span class="hud-badge badge-blue" id="faceStressBadge">Stress: 20%</span>
+            </div>
+
+            <div class="hud-metric-row">
+              <span class="lbl">Facial Vitality Score:</span>
+              <span class="hud-badge badge-emerald" id="faceVitalityBadge">Vitality: 92/100</span>
+            </div>
+
+            <!-- New Dermatology & Disease Screening Badges -->
+            <div class="hud-metric-row">
+              <span class="lbl">Capillary Perfusion / Pallor:</span>
+              <span class="hud-badge badge-emerald" id="facePallorBadge">Healthy Perfusion ✔</span>
+            </div>
+
+            <div class="hud-metric-row">
+              <span class="lbl">Jaundice / Bilirubin (Yellow Tint):</span>
+              <span class="hud-badge badge-emerald" id="faceJaundiceBadge">Negative / Clear Sclera ✔</span>
+            </div>
+
+            <div class="hud-metric-row">
+              <span class="lbl">Affect & Depression Risk:</span>
+              <span class="hud-badge badge-emerald" id="faceAffectBadge">Low Risk / Normal Expressive</span>
+            </div>
+
+            <div class="hud-clinical-summary-box">
+              <span class="lbl">Live Clinical Finding:</span>
+              <div class="clinical-summary-text" id="faceClinicalSummary">Analyzing microvascular perfusion and emotional affect...</div>
+            </div>
+
+            <div class="oled-sync-notice">
+              <span class="icon">🔄</span>
+              <span>Syncing live mood & condition to ESP32 Mini OLED display.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-footer">
+          <button class="btn btn-secondary" onclick="App.goToStep(3)">← Back to Vitals</button>
+          <button class="btn btn-primary" onclick="App.captureStudentPhotoAndProceed()">
+            📸 Capture Photo & Evaluate Standards →
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 5: PEDIATRIC MEDICAL STANDARD COMPARISON -->
+      <section class="step-card" data-step="5">
+        <div class="card-header">
+          <h2>Step 5: Pediatric Clinical Standard Value Comparison</h2>
+          <p>The student's recorded physiological readings matched against WHO and AAP clinical standards.</p>
+        </div>
+
+        <div id="step5ComparisonContainer">
+          <!-- Populated dynamically by App.renderStep5Review() -->
+        </div>
+
+        <div class="action-footer">
+          <button class="btn btn-secondary" onclick="App.goToStep(4)">← Re-check Face</button>
+          <button class="btn btn-primary" onclick="App.goToStep(6)">Generate Official Health Card →</button>
+        </div>
+      </section>
+
+      <!-- STEP 6: OFFICIAL REPORT CARD & EXPORT -->
+      <section class="step-card" data-step="6">
+        <div class="card-header">
+          <h2>Step 6: Official Student Health Report Card</h2>
+          <p>Completed weekly checkup report saved to database. Ready for printing or school record filing.</p>
+        </div>
+
+        <!-- Render Target for Printable Medical Report Card -->
+        <div id="reportCardRenderArea">
+          <!-- Populated dynamically by ReportGenerator.renderReportCardHtml() -->
+        </div>
+
+        <!-- Actions Toolbar -->
+        <div class="report-actions-bar">
+          <button class="btn btn-print" onclick="App.printReportCard()">🖨 Print Medical Card</button>
+          <button class="btn btn-secondary" onclick="App.switchTab('history')">📊 View Multi-Week History</button>
+          <button class="btn btn-primary" onclick="App.startNewStudentCheckup()">🔄 Start Next Student Checkup</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ================= VIEW 2: MULTI-WEEK HISTORICAL TRACKER ================= -->
+  <main class="app-view" id="view-history">
+    <div class="history-view-container">
+      <div class="history-header">
+        <div class="title-col">
+          <h2>Student Multi-Week Health Trajectory Tracker</h2>
+          <p>Track weekly trends in Heart Rate, SpO2, Temperature, Stress levels, and Health Scores across weeks.</p>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="history-search-bar">
+          <input type="text" id="historySearchInput" placeholder="Enter Student ID (e.g. STU-2026-001)" />
+          <button class="btn btn-primary" onclick="App.searchHistory()">Search History</button>
+        </div>
+      </div>
+
+      <!-- Trend Chart Canvas -->
+      <div class="trend-chart-card">
+        <h3>Multi-Week Composite Health Index Trajectory</h3>
+        <canvas id="historyTrendCanvas" width="900" height="220"></canvas>
+      </div>
+
+      <!-- Historical Checkups Table Container -->
+      <div id="historyTableContainer">
+        <!-- Rendered by ReportGenerator.renderHistoryView() -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Application Scripts -->
+  <script src="js/medical_standards.js"></script>
+  <script src="js/ecg_oscilloscope.js"></script>
+  <script src="js/face_stress_ai.js"></script>
+  <script src="js/esp_connector.js"></script>
+  <script src="js/report_generator.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
